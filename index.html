@@ -439,6 +439,7 @@ tr:last-child td{border-bottom:none}
     </select></div></div>
     <div class="g2"><div><label>Daily calorie goal</label><input type="number" id="p-calgoal" placeholder="1500"/></div><div><label>Daily step goal</label><input type="number" id="p-stepgoal" placeholder="8000"/></div></div>
     <button class="btn btnp btnf" onclick="saveProfile()">Save profile</button>
+    <button class="btn btnf" style="margin-top:8px;color:var(--red);border-color:#ECA5A5" onclick="localStorage.removeItem('vital_api_key');alert('API key cleared. You will be prompted to enter it again next time you use AI estimates.')">Reset API key</button>
   </div>
   <div class="card" id="bmr-card" style="display:none">
     <div class="ct">Your calculated numbers</div>
@@ -601,13 +602,35 @@ function qDel(type,idx){if(type==='food')S.foods.splice(idx,1);else if(type==='e
 async function analyzeNLP(){
   const desc=document.getElementById('nlp-input').value.trim();if(!desc){alert('Please describe your meal.');return;}
   const btn=document.getElementById('nlp-btn');const result=document.getElementById('nlp-result');
+
+  // always check for API key first before attempting
+  let apiKey=localStorage.getItem('vital_api_key')||'';
+  if(!apiKey){
+    const key=prompt('To use AI meal estimates, enter your Anthropic API key.\n\nGet one at console.anthropic.com → API Keys → Create Key\n(starts with sk-ant-)');
+    if(!key){btn.textContent='Estimate calories';btn.disabled=false;return;}
+    localStorage.setItem('vital_api_key',key.trim());
+    apiKey=key.trim();
+  }
+
   btn.textContent='Estimating...';btn.disabled=true;result.style.display='none';
   try{
-    const apiKey=localStorage.getItem('vital_api_key')||'';
-    const headers={'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
-    if(apiKey)headers['x-api-key']=apiKey;
+    const headers={
+      'Content-Type':'application/json',
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true',
+      'x-api-key':apiKey
+    };
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Analyze this meal and estimate calories/macros per item. Meal: "${desc}"\nRespond ONLY in JSON, no markdown:\n{"items":[{"name":"item with portion","calories":number,"protein":number,"carbs":number,"fat":number}],"totalCalories":number,"totalProtein":number,"totalCarbs":number,"totalFat":number,"notes":"one sentence tip"}`}]})});
-    const d=await r.json();if(d.error)throw new Error(d.error.message);
+    const d=await r.json();
+    if(d.error){
+      // if auth error, clear key and let user re-enter
+      if(d.error.type==='authentication_error'){
+        localStorage.removeItem('vital_api_key');
+        alert('API key was invalid. Please try again and re-enter your key.');
+        btn.textContent='Estimate calories';btn.disabled=false;return;
+      }
+      throw new Error(d.error.message);
+    }
     const p=JSON.parse(d.content.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim());
     nlpPending={name:document.getElementById('nlp-type').value+': '+desc.substring(0,55)+(desc.length>55?'...':''),mealType:document.getElementById('nlp-type').value,calories:p.totalCalories,protein:p.totalProtein,carbs:p.totalCarbs,fat:p.totalFat};
     document.getElementById('nlp-items').innerHTML=p.items.map(it=>`<div class="airrow"><div><div style="font-weight:500">${it.name}</div><div style="font-size:11px;color:var(--text2)">P:${it.protein}g C:${it.carbs}g F:${it.fat}g</div></div><div style="font-weight:600;color:var(--green)">${it.calories} kcal</div></div>`).join('');
@@ -615,8 +638,7 @@ async function analyzeNLP(){
     document.getElementById('nlp-total-macros').textContent=`P:${p.totalProtein}g C:${p.totalCarbs}g F:${p.totalFat}g${p.notes?' · '+p.notes:''}`;
     result.style.display='block';
   }catch(err){
-    if(err.message&&(err.message.includes('401')||err.message.includes('403'))){const key=prompt('Enter your Anthropic API key to use AI estimates.\nGet one free at console.anthropic.com:');if(key){localStorage.setItem('vital_api_key',key);btn.textContent='Estimate calories';btn.disabled=false;analyzeNLP();return;}}
-    else{alert('Could not estimate. Try again or log manually.');}
+    alert('Could not estimate: '+(err.message||'unknown error')+'\n\nTry again or log manually. If this keeps happening, go to My Profile and tap "Reset API key".');
   }
   btn.textContent='Estimate calories';btn.disabled=false;
 }
