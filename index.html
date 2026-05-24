@@ -620,7 +620,7 @@ async function analyzeNLP(){
       'anthropic-dangerous-direct-browser-access':'true',
       'x-api-key':apiKey
     };
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1000,messages:[{role:'user',content:`Analyze this meal and estimate calories/macros per item. Meal: "${desc}"\nRespond ONLY in JSON, no markdown:\n{"items":[{"name":"item with portion","calories":number,"protein":number,"carbs":number,"fat":number}],"totalCalories":number,"totalProtein":number,"totalCarbs":number,"totalFat":number,"notes":"one sentence tip"}`}]})});
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:`Analyze this meal and estimate calories/macros per item. Meal: "${desc}"\nRespond ONLY in JSON, no markdown:\n{"items":[{"name":"item with portion","calories":number,"protein":number,"carbs":number,"fat":number}],"totalCalories":number,"totalProtein":number,"totalCarbs":number,"totalFat":number,"notes":"one sentence tip"}`}]})});
     const d=await r.json();
     if(d.error){
       // if auth error, clear key and let user re-enter
